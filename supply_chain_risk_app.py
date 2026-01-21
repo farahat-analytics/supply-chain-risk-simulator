@@ -33,17 +33,17 @@ def create_supply_network():
     """Create a sample supply chain network"""
     G = nx.DiGraph()
     
-    # Add nodes with attributes
+    # Add nodes with attributes including tier for positioning
     nodes = {
-        "Supplier A": {"type": "supplier", "location": "Asia", "capacity": 1000},
-        "Supplier B": {"type": "supplier", "location": "Europe", "capacity": 800},
-        "Manufacturer 1": {"type": "manufacturer", "location": "North America", "capacity": 1500},
-        "Manufacturer 2": {"type": "manufacturer", "location": "Asia", "capacity": 1200},
-        "Distributor 1": {"type": "distributor", "location": "North America", "capacity": 2000},
-        "Distributor 2": {"type": "distributor", "location": "Europe", "capacity": 1800},
-        "Retailer A": {"type": "retailer", "location": "North America", "capacity": 500},
-        "Retailer B": {"type": "retailer", "location": "Europe", "capacity": 600},
-        "Retailer C": {"type": "retailer", "location": "Asia", "capacity": 400}
+        "Supplier A": {"type": "supplier", "location": "Asia", "capacity": 1000, "tier": 0},
+        "Supplier B": {"type": "supplier", "location": "Europe", "capacity": 800, "tier": 0},
+        "Manufacturer 1": {"type": "manufacturer", "location": "North America", "capacity": 1500, "tier": 1},
+        "Manufacturer 2": {"type": "manufacturer", "location": "Asia", "capacity": 1200, "tier": 1},
+        "Distributor 1": {"type": "distributor", "location": "North America", "capacity": 2000, "tier": 2},
+        "Distributor 2": {"type": "distributor", "location": "Europe", "capacity": 1800, "tier": 2},
+        "Retailer A": {"type": "retailer", "location": "North America", "capacity": 500, "tier": 3},
+        "Retailer B": {"type": "retailer", "location": "Europe", "capacity": 600, "tier": 3},
+        "Retailer C": {"type": "retailer", "location": "Asia", "capacity": 400, "tier": 3}
     }
     
     for node, attrs in nodes.items():
@@ -111,15 +111,44 @@ def run_monte_carlo_simulation(G, num_sims, disruption_prob, delay_mean, delay_s
     
     return pd.DataFrame(results)
 
+def create_hierarchical_layout(G):
+    """Create a left-to-right hierarchical layout based on node tiers"""
+    pos = {}
+    
+    # Group nodes by tier
+    tiers = {}
+    for node in G.nodes():
+        tier = G.nodes[node]['tier']
+        if tier not in tiers:
+            tiers[tier] = []
+        tiers[tier].append(node)
+    
+    # Calculate positions
+    x_spacing = 3.0  # Horizontal spacing between tiers
+    y_spacing = 2.0  # Vertical spacing between nodes in same tier
+    
+    for tier, nodes in tiers.items():
+        x = tier * x_spacing
+        num_nodes = len(nodes)
+        # Center nodes vertically
+        y_start = -(num_nodes - 1) * y_spacing / 2
+        
+        for i, node in enumerate(sorted(nodes)):
+            y = y_start + i * y_spacing
+            pos[node] = (x, y)
+    
+    return pos
+
 # Create network
 G = create_supply_network()
 
 # Tab 1: Network Visualization
 with tab1:
     st.subheader("Supply Chain Network Structure")
+    st.markdown("*Flow: Suppliers → Manufacturers → Distributors → Retailers*")
     
-    # Create network layout
-    pos = nx.spring_layout(G, k=2, iterations=50, seed=42)
+    # Create hierarchical layout (left to right)
+    pos = create_hierarchical_layout(G)
     
     # Prepare edge trace
     edge_x = []
@@ -144,6 +173,7 @@ with tab1:
     node_y = []
     node_text = []
     node_color = []
+    node_labels = []
     
     color_map = {
         "supplier": "#FF6B6B",
@@ -159,12 +189,13 @@ with tab1:
         node_info = G.nodes[node]
         node_text.append(f"{node}<br>Type: {node_info['type']}<br>Location: {node_info['location']}<br>Capacity: {node_info['capacity']}")
         node_color.append(color_map[node_info['type']])
+        node_labels.append(node)
     
     node_trace = go.Scatter(
         x=node_x, y=node_y,
         mode='markers+text',
         hoverinfo='text',
-        text=[node for node in G.nodes()],
+        text=node_labels,
         textposition="top center",
         hovertext=node_text,
         marker=dict(
@@ -178,7 +209,7 @@ with tab1:
                     layout=go.Layout(
                         showlegend=False,
                         hovermode='closest',
-                        margin=dict(b=0, l=0, r=0, t=0),
+                        margin=dict(b=20, l=20, r=20, t=40),
                         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
                         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
                         height=600
